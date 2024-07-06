@@ -8,9 +8,11 @@ import fitz
 from docx import Document
 import time
 import re
+import os
 import logging
 import sys
 import jieba
+import jieba.analyse
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, scrolledtext
 
@@ -32,6 +34,19 @@ class FileAnalyzer:
         self.logger.setLevel(logging.INFO)
         time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
         self.logger.addHandler(logging.FileHandler(time_str + 'log.txt'))
+        self.stopwords = set()
+        for root, dirs, files in os.walk('stopwords'):
+            for file in files:
+                if (file.endswith('.txt') == False):
+                    continue
+                
+                with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
+                    for line in f:
+                        self.stopwords.add(line.strip())
+                        
+    def _remove_stopwords(self, text):
+        santi_words =[x for x in text if len(x) > 1 and x not in self.stopwords]
+        return santi_words
         
     def _extract_text_from_pdf(self):
         """
@@ -76,7 +91,7 @@ class FileAnalyzer:
         Args:
             level (int): The logging level.
         """
-        self.logger.setLevel(level)
+        self.logger.setLevel(level)     
 
     def analyze_file(self, top_k_words=10):
         """
@@ -96,12 +111,11 @@ class FileAnalyzer:
             text = ""
             self.logger.error("Unsupported file format")
             raise ValueError("Unsupported file format. Only .pdf and .docx are supported.")
-        
-        punctuation_pattern = r"[。，、；：？！「」『』（）【】《》〈〉——……—·～“”‘’.,;:?!\"'()\[\]{}\-_=+&@#$%*~/|\\<>^`]"
-        cleaned_text = re.sub(punctuation_pattern, ' ', text)
 
-        words = jieba.cut(cleaned_text, cut_all=False)
-        words = [word.strip() for word in words if word.strip()]
+        words = jieba.cut(text)
+        cleaned_words = self._remove_stopwords(words)
+        cleaned_text = ' '.join(cleaned_words)
+        words = jieba.analyse.extract_tags(cleaned_text, topK=1000, withWeight=False, allowPOS=())
         
         # Regex pattern construction for non-Chinese text
         letter_pattern = r'[a-zA-Z]'  # English letters
